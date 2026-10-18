@@ -36,8 +36,8 @@ grafana_defaults:
 
 bbus:
   - {<<: *defaults, id: 1, tls_spki_sha256: "fBZ7EleWDB9PzQflyUmdPlU70htNRTTlfSIi7++bl1Y=", url: "https://10.50.0.21/", site: AM_TFE_01, locality: Torre Claro,      label: Tefé 1 Torre Claro,      has_5g: true, grafana: {panel_title: "TEFE 1 - TORRE CLARO", panel_id: 139}}
-  - {<<: *defaults, id: 2, url: "https://10.50.0.22/", site: AM_TFE_02, locality: São Miguel,       label: Tefé 2 São Miguel,       has_5g: false, pass_env: BBU2_PASS, grafana: {panel_title: "TEFE 2 - CX D'AGUA SAO MIGUEL", panel_id: 358}}
-  - {<<: *defaults, id: 3, url: "https://10.50.0.23/", site: AM_TFE_03, locality: Torre Tim,        label: Tefé 3 Torre Tim,        has_5g: true, grafana: {panel_title: "TEFE 3 - TORRE TIM", panel_id: 359}}
-  - {<<: *defaults, id: 4, url: "https://10.50.0.24/", site: AM_TFE_04, locality: Torre Boa Sorte,  label: Tefé 4 Torre Boa Sorte,  has_5g: true, grafana: {panel_title: "TEFE 4 - TORRE BOA SORTE", panel_id: 377}}
+  - {<<: *defaults, id: 2, tls_spki_sha256: "CtWOc5wVgqvNqsvL0vrA6Y9fulc+q7+5F3CX1qV13Oc=", url: "https://10.50.0.22/", site: AM_TFE_02, locality: São Miguel,       label: Tefé 2 São Miguel,       has_5g: false, pass_env: BBU2_PASS, grafana: {panel_title: "TEFE 2 - CX D'AGUA SAO MIGUEL", panel_id: 358}}
+  - {<<: *defaults, id: 3, tls_spki_sha256: "ZWyDi3lVxLMmv7l/S+mNqyb2D2TtEHL08/WJ8zxDrE4=", url: "https://10.50.0.23/", site: AM_TFE_03, locality: Torre Tim,        label: Tefé 3 Torre Tim,        has_5g: true, grafana: {panel_title: "TEFE 3 - TORRE TIM", panel_id: 359}}
+  - {<<: *defaults, id: 4, tls_spki_sha256: "olDVuutZLMpaFuqrYaTT8ZC4p1EaP8kQSfzYJr35bLg=", url: "https://10.50.0.24/", site: AM_TFE_04, locality: Torre Boa Sorte,  label: Tefé 4 Torre Boa Sorte,  has_5g: true, grafana: {panel_title: "TEFE 4 - TORRE BOA SORTE", panel_id: 377}}
   - {<<: *defaults, id: 5, url: "https://10.31.0.35/", site: AM_TFE_05, locality: Aeroporto,        label: Tefé 5 Aeroporto,        has_5g: false, grafana: {panel_title: "TEFE 5 - AEROPORTO", panel_id: 378}}
-  - {<<: *defaults, id: 6, url: "https://10.50.0.26/", site: AM_TFE_06, locality: Abial,            label: Tefé 6 Abial,            has_5g: false, grafana: {panel_title: "TEFE 6 - ABIAL", panel_id: 384}}
+  - {<<: *defaults, id: 6, tls_spki_sha256: "Yg2UxNB/NdcF/6ZJ90xmcCQQGDWecvXFWC9+rVbWgCE=", url: "https://10.50.0.26/", site: AM_TFE_06, locality: Abial,            label: Tefé 6 Abial,            has_5g: false, grafana: {panel_title: "TEFE 6 - ABIAL", panel_id: 384}}

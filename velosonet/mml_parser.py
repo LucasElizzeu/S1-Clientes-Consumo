@@ -64,7 +64,17 @@ def _huawei_tables(lines):
             ln = lines[j]
             cm = COUNT_RE.search(ln)
             if cm: declared = int(cm.group(1)); break
-            if not ln.strip() or END_RE.search(ln): break
+            if END_RE.search(ln): break
+            if not ln.strip():
+                j += 1
+                continue
+            # A interface pode alinhar dados em posições diferentes do cabeçalho.
+            # Quando todos os campos estão presentes, use os separadores de colunas.
+            values = re.split(r"\s{2,}", ln.strip())
+            if len(values) == len(cols):
+                recs.append(dict(zip((name for _, name in cols), values)))
+                j += 1
+                continue
             rec = {}
             for k, (st, name) in enumerate(cols):
                 end = cols[k + 1][0] if k + 1 < len(cols) else None
@@ -137,6 +147,11 @@ def extract_users(res: MmlResult, spec: dict) -> UserMetric:
         sel = [t for t in res.tables if norm(t.title) == norm(tt)]
         if not sel: raise MmlIncomplete(f"tabela '{tt}' ausente na resposta")
         recs = sel[0].records
+    # Algumas versões Huawei prefixam este mesmo contador por célula com "Cell".
+    # Só use o alias quando o nome configurado estiver ausente em toda a tabela.
+    if (fld == "Total RRC Number" and recs
+            and all(fld not in r and "Cell Total RRC Number" in r for r in recs)):
+        fld = "Cell Total RRC Number"
     dd = spec.get("dedupe_by") or []
     if dd:
         seen, uniq = set(), []

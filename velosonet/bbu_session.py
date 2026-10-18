@@ -18,27 +18,21 @@ def assert_read_only(cmd: str):
         raise UnsafeCommand(f"comando bloqueado (apenas DSP/LST): {cmd!r}")
 
 def slice_response(text: str, cmd: str) -> str | None:
-    """Recorta a resposta do comando.
-    A interface da BBU consome os '%' ao renderizar, então o marcador pode vir
-    como '%%CMD:;%%' (bruto) ou 'CMD:;' (renderizado). Além disso, os nomes de
-    coluna da tabela podem ser quebrados em várias linhas pela largura da tela.
-    """
+    """Seleciona só a resposta cujo eco corresponde ao comando solicitado."""
     base = cmd.strip().rstrip(";").strip()
-    for marker in (f"%%{base}:;%%", f"{base}:;", f"{base}:"):
-        idx = text.rfind(marker)
-        if idx < 0:
-            continue
-        start = text.rfind("+++", 0, idx)
-        chunk = text[start if start >= 0 else idx:]
-        if "RETCODE" in chunk and END_RE.search(chunk):
-            return chunk
-    idx = text.rfind("RETCODE")
-    if idx >= 0:
-        start = text.rfind("+++", 0, idx)
-        return text[start if start >= 0 else idx:]
-    return None
-
-
+    command = r"\s+".join(re.escape(part) for part in base.split())
+    echo = re.compile(r"^[ \t]*(?:%%)?" + command + r":[ \t]*;[ \t]*(?:%%)?[ \t]*\r?$", re.I | re.M)
+    matches = list(echo.finditer(text))
+    if not matches:
+        return None
+    match = matches[-1]
+    start = text.rfind("+++", 0, match.start())
+    start = start if start >= 0 else match.start()
+    # Não deixe um eco ainda sem resposta aproveitar o END de outro bloco.
+    next_block = text.find("+++", match.end())
+    stop = next_block if next_block >= 0 else len(text)
+    end = END_RE.search(text, match.end(), stop)
+    return text[start:end.end() if end else stop]
 
 class BbuSession:
     def __init__(self, bbu, settings, browser):
@@ -198,7 +192,7 @@ class BbuSession:
         sel = self.bbu.selectors
         try:
             step = "inicio"
-            before = await self._all_text()
+            before = slice_response(await self._all_text(), cmd)
 
             step = "digitar comando"
             loc = await self._wait(sel["mml_command_input"])
@@ -230,7 +224,7 @@ class BbuSession:
             while True:
                 text = await self._all_text()
                 resp = slice_response(text, cmd)
-                if resp and text != before and END_RE.search(resp):
+                if resp and resp != before and END_RE.search(resp):
                     break
                 if time.monotonic() > deadline:
                     await self._trace("error_timeout")
@@ -243,6 +237,8 @@ class BbuSession:
             await self._trace("error_mml")
             detail = (str(e).strip().splitlines() or [""])[0][:300]
             raise BbuUnavailable(f"falha na interface MML na etapa '{step}': {detail}") from None
+        self.last_activity = time.monotonic()
+        return resp
 
            
 

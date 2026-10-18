@@ -12,7 +12,6 @@ from .config import ROOT
 from .db import Database
 from .grafana import GrafanaClient
 from .report import render_report, build_summary, caption
-from . import telegram_sender
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +45,8 @@ class App:
     # ---- Rotina A ----
     async def routine_a(self):
         async def one(s):
+            if s.bbu.id in self.s.get("mml_disabled_bbus", [5]):
+                return
             try:
                 res = await s.keepalive()
                 if res.startswith("failed"): self.db.event(s.bbu.id, "keepalive_failed", res)
@@ -70,14 +71,12 @@ class App:
             png = render_report(rows, self.s, now, ROOT / "data" / "reports" / f"{now:%Y%m%d_%H%M}.png")
             cap = caption(build_summary(rows, self.s, now))
             self.db.finish_run(run_id, png, cap)
-            if self.s.get("telegram_enabled", True):
-                for p in self.db.pending_runs(telegram_sender.DEST):   # inclui reenvio de pendentes recentes
-                    await telegram_sender.send_photo(self.db, p["id"], p["png_path"], p["caption"])
+            log.info("Relatorio local salvo em %s", png)
 
     def schedule(self) -> AsyncIOScheduler:
         sch = AsyncIOScheduler(timezone=self.tz)
         sch.add_job(self.routine_a, "interval", minutes=self.s["keepalive_interval_min"], id="A",
                     max_instances=1, coalesce=True, misfire_grace_time=120)
-        sch.add_job(self.routine_b, "cron", minute=self.s["report_minute"], id="B",
+        sch.add_job(self.routine_b, "cron", hour="9-19", minute=0, second=0, id="B",
                     max_instances=1, coalesce=True, misfire_grace_time=600)
         return sch
