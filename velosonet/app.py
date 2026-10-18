@@ -1,5 +1,6 @@
 """Orquestração: Rotina A (keep-alive, 10 min) e Rotina B (relatório horário) com APScheduler."""
 from __future__ import annotations
+from .link_monitor import capture_link_reports
 import asyncio, logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -71,6 +72,7 @@ class App:
             png = render_report(rows, self.s, now, ROOT / "data" / "reports" / f"{now:%Y%m%d_%H%M}.png")
             cap = caption(build_summary(rows, self.s, now))
             self.db.finish_run(run_id, png, cap)
+            await capture_link_reports(self.browser, self.s, now)
             log.info("Relatorio local salvo em %s", png)
 
     def schedule(self) -> AsyncIOScheduler:
