@@ -1,0 +1,34 @@
+timezone: America/Manaus
+keepalive_interval_min: 5       # Rotina A. A BBU derruba a sessão após 10:00 ociosa (visto na tela) => usar < 10
+session_max_age_min: 450        # a tela mostra 'Session Lifetime' ~8h: reloga proativamente antes de expirar
+report_minute: 0                # Rotina B: minuto da hora (0 = horário cheio)
+bbu_timeout_s: 150              # timeout total por BBU na Rotina B
+page_timeout_s: 30
+mml_response_timeout_s: 45
+login_max_retries: 3
+login_cooldown_min: 10          # pausa após esgotar tentativas (evita bloqueio de conta)
+alert_min_traffic_mbps: null    # null = tráfego baixo NÃO gera alerta
+save_raw_responses: true
+telegram_enabled: true
+grafana_enabled: true
+
+# Somente leitura (DSP/LST). Parsers ficam "unconfigured" até validar com resposta real.
+commands:
+  keepalive: "DSP S1INTERFACE"  # consulta segura; confirme que é suficiente para manter a sessão
+  users_4g:
+    command: "DSP S1INTERFACE"
+    parser:
+      mode: field_sum            # soma de 'S1 Interface User Number' (campo visto na resposta real da BBU 1)
+      field: "S1 Interface User Number"
+      dedupe_by: ["S1 Interface ID"]
+      cell_key: "S1 Interface ID"
+  users_5g:
+    command: "DSP NRCELLUENUMBER"
+    parser:
+      mode: field_sum
+      # A resposta traz 2 tabelas (por célula e por célula+operadora, mesmos números): usa só a primeira.
+      table_title: "Display NR Cell UE Access Statistics"
+      # CONFIRMAR: qual campo representa "usuários 5G". Padrão = Total RRC Number (na BBU 1 coincide com EN-DC UE Number).
+      field: "Total RRC Number"
+      dedupe_by: ["NR Cell ID"]
+      cell_key: "NR Cell ID"

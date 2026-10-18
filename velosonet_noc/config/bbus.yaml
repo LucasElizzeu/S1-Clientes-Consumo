@@ -1,0 +1,43 @@
+# Preencha url, selectors e grafana com base em CAPTURAS REAIS (use: python -m velosonet snapshot --bbu 1).
+# Nenhum seletor foi presumido: valores null bloqueiam a coleta com erro explícito.
+defaults: &defaults
+  user_env: BBU_USER
+  pass_env: BBU_PASS
+  keepalive: true
+  tls_spki_sha256: null      # preencha com: python -m velosonet tls-pin --all  (certificado autoassinado da BBU)
+  verify_tls: true          # mantenha true; se a BBU usa certificado próprio, instale a CA no SO/navegador
+  url: null
+  # PROVISÓRIO: derivado dos rótulos visíveis nas capturas (User name/Password/Login, Yes, MML, Assist, Exec).
+  # NÃO testado contra a BBU real. Valide com: python -m velosonet capture --bbu 1 --command "DSP S1INTERFACE"
+  # (gera screenshots e HTML de cada etapa em data/samples/trace/ para ajuste fino).
+  selectors:
+    username: 'input[type="text"]:visible'
+    password: 'input[type="password"]'
+    login_button: 'input[value="Login"], :text-is("Login")'
+    confirm_yes: 'input[value="Yes"], :text-is("Yes")'        # aviso "Only authorized users..." após o login
+    logged_in_indicator: ':text("Local User")'
+    login_form_indicator: 'input[type="password"]'            # visível => sessão expirada
+    mml_menu: ':text-is("MML")'
+    mml_command_input: 'input[type="text"]:visible >> nth=-1' # campo "Command (F5)"
+    mml_assist_button: 'input[value="Assist"], :text-is("Assist")'  # libera o Exec
+    mml_execute_button: 'input[value="Exec"], :text-is("Exec")'
+    mml_output: "@all_frames"                                  # lê o texto de todos os frames; o código fatia a resposta
+
+grafana_defaults:
+  dashboard_uid: kokmJS2Dz          # cliente-velosonet-velosonet-4g-geral-v3 (orgId=2)
+  panel_title: null                 # o painel é localizado pelo TÍTULO...
+  panel_id: null
+  allowed_panel_ids: [139, 358, 359, 377, 378, 384]   # ...e o id encontrado precisa estar nesta lista (informada por você)
+  ref_id: null                      # null = primeiro target do painel
+  metric: "não confirmado"          # CONFIRMAR: download | upload | agregado (ver: python -m velosonet grafana-panels)
+  scale: null                       # null = deriva da unidade do painel (ex.: bps -> Mb/s); defina só se a unidade for desconhecida
+  variables: {}
+  max_age_s: 900
+
+bbus:
+  - {<<: *defaults, id: 1, url: "http://10.50.0.21/", site: AM_TFE_01, locality: Torre Claro,      label: Tefé 1 Torre Claro,      has_5g: true, grafana: {panel_title: "TEFE 1 - TORRE CLARO", panel_id: 139}}
+  - {<<: *defaults, id: 2, url: "https://10.50.0.22/", site: AM_TFE_02, locality: São Miguel,       label: Tefé 2 São Miguel,       has_5g: false, pass_env: BBU2_PASS, grafana: {panel_title: "TEFE 2 - CX D'AGUA SAO MIGUEL", panel_id: 358}}
+  - {<<: *defaults, id: 3, url: "http://10.50.0.23/", site: AM_TFE_03, locality: Torre Tim,        label: Tefé 3 Torre Tim,        has_5g: true, grafana: {panel_title: "TEFE 3 - TORRE TIM", panel_id: 359}}
+  - {<<: *defaults, id: 4, url: "http://10.50.0.24/", site: AM_TFE_04, locality: Torre Boa Sorte,  label: Tefé 4 Torre Boa Sorte,  has_5g: true, grafana: {panel_title: "TEFE 4 - TORRE BOA SORTE", panel_id: 377}}
+  - {<<: *defaults, id: 5, url: "http://10.31.0.35/", site: AM_TFE_05, locality: Aeroporto,        label: Tefé 5 Aeroporto,        has_5g: false, grafana: {panel_title: "TEFE 5 - AEROPORTO", panel_id: 378}}
+  - {<<: *defaults, id: 6, url: "http://10.50.0.26/", site: AM_TFE_06, locality: Abial,            label: Tefé 6 Abial,            has_5g: false, grafana: {panel_title: "TEFE 6 - ABIAL", panel_id: 384}}
