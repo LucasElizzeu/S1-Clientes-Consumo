@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitor 4G/5G VELOSONET Tefé
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=velosonet
+WorkingDirectory=/opt/velosonet_noc
+ExecStart=/opt/velosonet_noc/.venv/bin/python -m velosonet run
+Restart=always
+RestartSec=15
+Environment=TZ=America/Manaus
+
+[Install]
+WantedBy=multi-user.target
