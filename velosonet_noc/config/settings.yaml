@@ -12,6 +12,9 @@ save_raw_responses: true
 telegram_enabled: true
 grafana_enabled: true
 
+manual_login_bbus: []
+mml_disabled_bbus: []
+
 # Somente leitura (DSP/LST). Parsers ficam "unconfigured" até validar com resposta real.
 commands:
   keepalive: "DSP S1INTERFACE"  # consulta segura; confirme que é suficiente para manter a sessão

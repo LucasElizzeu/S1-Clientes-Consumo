@@ -17,8 +17,8 @@ defaults: &defaults
     confirm_yes: 'input[value="Yes"], :text-is("Yes")'        # aviso "Only authorized users..." após o login
     logged_in_indicator: ':text("Local User")'
     login_form_indicator: 'input[type="password"]'            # visível => sessão expirada
-    mml_menu: ':text-is("MML")'
-    mml_command_input: 'input[type="text"]:visible >> nth=-1' # campo "Command (F5)"
+    mml_menu: '#welcomePane .icon:has-text("MML") > div:first-child'
+    mml_command_input: '#mmlcmdtext___input' # campo "Command (F5)"
     mml_assist_button: 'input[value="Assist"], :text-is("Assist")'  # libera o Exec
     mml_execute_button: 'input[value="Exec"], :text-is("Exec")'
     mml_output: "@all_frames"                                  # lê o texto de todos os frames; o código fatia a resposta
@@ -35,9 +35,9 @@ grafana_defaults:
   max_age_s: 900
 
 bbus:
-  - {<<: *defaults, id: 1, url: "http://10.50.0.21/", site: AM_TFE_01, locality: Torre Claro,      label: Tefé 1 Torre Claro,      has_5g: true, grafana: {panel_title: "TEFE 1 - TORRE CLARO", panel_id: 139}}
-  - {<<: *defaults, id: 2, url: "https://10.50.0.22/", site: AM_TFE_02, locality: São Miguel,       label: Tefé 2 São Miguel,       has_5g: false, pass_env: BBU2_PASS, grafana: {panel_title: "TEFE 2 - CX D'AGUA SAO MIGUEL", panel_id: 358}}
-  - {<<: *defaults, id: 3, url: "http://10.50.0.23/", site: AM_TFE_03, locality: Torre Tim,        label: Tefé 3 Torre Tim,        has_5g: true, grafana: {panel_title: "TEFE 3 - TORRE TIM", panel_id: 359}}
-  - {<<: *defaults, id: 4, url: "http://10.50.0.24/", site: AM_TFE_04, locality: Torre Boa Sorte,  label: Tefé 4 Torre Boa Sorte,  has_5g: true, grafana: {panel_title: "TEFE 4 - TORRE BOA SORTE", panel_id: 377}}
-  - {<<: *defaults, id: 5, url: "http://10.31.0.35/", site: AM_TFE_05, locality: Aeroporto,        label: Tefé 5 Aeroporto,        has_5g: false, grafana: {panel_title: "TEFE 5 - AEROPORTO", panel_id: 378}}
-  - {<<: *defaults, id: 6, url: "http://10.50.0.26/", site: AM_TFE_06, locality: Abial,            label: Tefé 6 Abial,            has_5g: false, grafana: {panel_title: "TEFE 6 - ABIAL", panel_id: 384}}
+  - {<<: *defaults, id: 1, tls_spki_sha256: "fBZ7EleWDB9PzQflyUmdPlU70htNRTTlfSIi7++bl1Y=", url: "https://10.50.0.21/", site: AM_TFE_01, locality: Torre Claro,      label: Tefé 1 Torre Claro,      has_5g: true, grafana: {panel_title: "TEFE 1 - TORRE CLARO", panel_id: 139}}
+  - {<<: *defaults, id: 2, tls_spki_sha256: "CtWOc5wVgqvNqsvL0vrA6Y9fulc+q7+5F3CX1qV13Oc=", url: "https://10.50.0.22/", site: AM_TFE_02, locality: São Miguel,       label: Tefé 2 São Miguel,       has_5g: false, pass_env: BBU2_PASS, grafana: {panel_title: "TEFE 2 - CX D'AGUA SAO MIGUEL", panel_id: 358}}
+  - {<<: *defaults, id: 3, tls_spki_sha256: "ZWyDi3lVxLMmv7l/S+mNqyb2D2TtEHL08/WJ8zxDrE4=", url: "https://10.50.0.23/", site: AM_TFE_03, locality: Torre Tim,        label: Tefé 3 Torre Tim,        has_5g: true, grafana: {panel_title: "TEFE 3 - TORRE TIM", panel_id: 359}}
+  - {<<: *defaults, id: 4, tls_spki_sha256: "olDVuutZLMpaFuqrYaTT8ZC4p1EaP8kQSfzYJr35bLg=", url: "https://10.50.0.24/", site: AM_TFE_04, locality: Torre Boa Sorte,  label: Tefé 4 Torre Boa Sorte,  has_5g: true, grafana: {panel_title: "TEFE 4 - TORRE BOA SORTE", panel_id: 377}}
+  - {<<: *defaults, id: 5, tls_spki_sha256: "foP9aX9CL9MwiDH2ceNMRxlo+lrnU3uNzmE1K5rYvxo=", url: "https://10.31.0.35/", site: AM_TFE_05, locality: Aeroporto,        label: Tefé 5 Aeroporto,        has_5g: false, grafana: {panel_title: "TEFE 5 - AEROPORTO", panel_id: 378}}
+  - {<<: *defaults, id: 6, tls_spki_sha256: "Yg2UxNB/NdcF/6ZJ90xmcCQQGDWecvXFWC9+rVbWgCE=", url: "https://10.50.0.26/", site: AM_TFE_06, locality: Abial,            label: Tefé 6 Abial,            has_5g: false, grafana: {panel_title: "TEFE 6 - ABIAL", panel_id: 384}}

@@ -35,6 +35,10 @@ async def collect_bbu(bbu, session, settings, grafana=None) -> dict:
 
     async def mml():
         nonlocal mml_fail, unavailable
+        if bbu.id in settings.get("mml_disabled_bbus", []):
+            unavailable = True
+            row["errors"].append("mml:unavailable:consulta desativada na configuracao")
+            return
         for key, attr in (("users_4g", "users4g"), ("users_5g", "users5g")):
             if key == "users_5g" and not bbu.has_5g: continue
             try:

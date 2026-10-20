@@ -51,18 +51,8 @@ class Database:
     def finish_run(self, run_id, png_path, caption):
         self._x("UPDATE runs SET finished_at=?, png_path=?, caption=? WHERE id=?", (_now(), str(png_path), caption, run_id))
 
-    def delivered(self, run_id, dest) -> bool:
-        return self._x("SELECT 1 FROM deliveries WHERE run_id=? AND destination=? AND ok=1", (run_id, dest)).fetchone() is not None
 
-    def add_delivery(self, run_id, dest, attempt, ok, detail=""):
-        self._x("INSERT INTO deliveries(run_id,destination,attempt,ok,detail,ts) VALUES(?,?,?,?,?,?)",
-                (run_id, dest, attempt, int(ok), detail[:300], _now()))
 
-    def pending_runs(self, dest, hours=3):
-        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-        return self._x("""SELECT id, png_path, caption FROM runs WHERE finished_at IS NOT NULL AND simulation=0
-            AND png_path IS NOT NULL AND finished_at>=? AND id NOT IN
-            (SELECT run_id FROM deliveries WHERE destination=? AND ok=1)""", (since, dest)).fetchall()
 
     def event(self, bbu_id, kind, detail=""):
         self._x("INSERT INTO events VALUES(?,?,?,?)", (_now(), bbu_id, kind, detail[:300]))

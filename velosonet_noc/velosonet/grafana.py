@@ -2,7 +2,7 @@
 reutiliza os targets e consulta /api/ds/query. Retorna o ÚLTIMO ponto numérico real da série, convertido para
 Mb/s pela unidade configurada no próprio painel (nada de estimar valores olhando o gráfico)."""
 from __future__ import annotations
-import copy, logging, os, re, time
+import copy, logging, os, re, time, unicodedata
 try:
     import httpx
 except ImportError:          # permite testar a lógica pura sem httpx instalado
@@ -15,7 +15,10 @@ log = logging.getLogger(__name__)
 UNIT_SCALE = {"bps": 1e-6, "Kbits": 1e-3, "Mbits": 1.0, "Gbits": 1e3,
               "Bps": 8e-6, "KBs": 8e-3, "MBs": 8.0, "GBs": 8e3}
 
-def _norm(t): return re.sub(r"[^a-z0-9]", "", (t or "").lower())
+def _norm(t):
+    text = unicodedata.normalize("NFKD", t or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]", "", text.lower())
 
 def _walk_panels(panels):
     for p in panels or []:
@@ -109,13 +112,15 @@ class GrafanaClient:
             dash = await self.dashboard(spec["dashboard_uid"])
             panel = resolve_panel(dash, spec)
             scale, why = unit_scale(panel, spec)
-            targets = [t for t in panel.get("targets", []) if not t.get("hide")]
-            ref = spec.get("ref_id") or (targets[0].get("refId") if targets else None)
+            targets = panel.get("targets", [])
+            visible = [t for t in targets if not t.get("hide")]
+            ref = spec.get("ref_id") or (visible[0].get("refId") if visible else None)
             queries = []
             for t in targets:
-                if t.get("refId") != ref: continue
                 q = _subst(copy.deepcopy(t), spec.get("variables") or {})
-                q.setdefault("datasource", panel.get("datasource") or dash.get("datasource"))
+                q["hide"] = False
+                if not q.get("datasource"):
+                    q["datasource"] = panel.get("datasource") or dash.get("datasource")
                 q.update(intervalMs=60000, maxDataPoints=500)
                 queries.append(q)
             if not queries: raise GrafanaError("nenhum target utilizável no painel")

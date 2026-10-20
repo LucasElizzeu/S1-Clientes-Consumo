@@ -1,0 +1,13 @@
+﻿
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+*.bak_*
+*.zip
+.pytest_cache/
+velosonet_noc/data/
+velosonet_noc/logs/
+velosonet_noc/backups/

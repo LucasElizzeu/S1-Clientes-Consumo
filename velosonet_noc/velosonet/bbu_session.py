@@ -23,7 +23,9 @@ def slice_response(text: str, cmd: str) -> str | None:
     idx = text.rfind(marker)
     if idx < 0: return None
     start = text.rfind("+++", 0, idx)
-    return text[start if start >= 0 else idx:]
+    chunk = text[start if start >= 0 else idx:]
+    end = END_RE.search(chunk)
+    return chunk[:end.end()] if end else chunk
 
 class BbuSession:
     def __init__(self, bbu, settings, browser):
@@ -115,13 +117,25 @@ class BbuSession:
         self._diag = []
         self.page.on("requestfailed", lambda r: self._diag.append(f"requestfailed {r.url} {r.failure}"))
         self.page.on("console", lambda m: self._diag.append(f"console.{m.type} {m.text[:200]}") if m.type == "error" else None)
-        self.page.on("pageerror", lambda e: self._diag.append(f"pageerror {str(e)[:200]}"))
+        self.page.on("pageerror", lambda e: self._diag.append("pageerror " + str(getattr(e, "stack", None) or e)[:4000]))
         try:
             await self.page.goto(self.bbu.url, wait_until="domcontentloaded")
             await (await self._wait(sel["password"])).wait_for(state="visible")
             await self._trace("1_login_page")
             await (await self._wait(sel["username"])).fill(user)
             await (await self._wait(sel["password"])).fill(pwd)
+            if self.bbu.id in self.s.get("manual_login_bbus", []):
+                await self.page.bring_to_front()
+                log.warning("BBU %s: preencha o CAPTCHA, clique Login e confirme Yes se aparecer. Prazo: 120 segundos.", self.bbu.id)
+                try:
+                    await self._wait(sel["logged_in_indicator"], timeout_s=120)
+                except PwError:
+                    await self._trace("error_manual_login")
+                    raise ConfigError("Login assistido nao concluido; nenhuma nova tentativa automatica foi feita") from None
+                await self._trace("2_logged_in")
+                self.login_time = self.last_activity = time.monotonic()
+                log.info("BBU %s: login assistido OK", self.bbu.id)
+                return
             await self._click(sel["login_button"])
             if sel.get("confirm_yes"):                      # aviso "Only authorized users..." -> Yes
                 try: await self._click(sel["confirm_yes"], timeout_s=15)
@@ -152,34 +166,50 @@ class BbuSession:
         raise last or BbuUnavailable("login indisponível")
 
     async def _open_mml(self):
-        if self.mml_ready: return
         sel = self.bbu.selectors
+        if await self._loc(sel["mml_command_input"]):
+            self.mml_ready = True
+            return
+        self.mml_ready = False
+        step = "clicar no menu MML"
         try:
             await self._click(sel["mml_menu"])
+            step = "aguardar campo de comando"
             await self._wait(sel["mml_command_input"])
             await self._trace("3_mml_open")
         except PwError as e:
             await self._trace("error_mml_open")
-            raise BbuUnavailable(f"menu MML indisponível ({type(e).__name__})") from None
+            detail = (str(e).strip().splitlines() or [""])[0][:220]
+            raise BbuUnavailable(f"MML: {step}: {detail}") from None
         self.mml_ready = True
 
-    # ---------- operações ----------
     async def _run_locked(self, cmd: str) -> str:
         assert_read_only(cmd)
         await self.ensure_session()
         await self._open_mml()
         sel = self.bbu.selectors
+        step = "ler tela inicial"
         try:
-            before = await self._all_text()
-            await (await self._wait(sel["mml_command_input"])).fill(cmd)
+            before = slice_response(await self._all_text(), cmd)
+            step = "digitar comando"
+            field = await self._wait(sel["mml_command_input"])
+            await field.click()
+            await field.fill("")
+            await field.press_sequentially(cmd, delay=50)
+            await field.press("Enter")
+            await asyncio.sleep(0.3)
+            await field.press("Tab")
             if sel.get("mml_assist_button"):                # Assist libera o botão Exec
+                step = "clicar Assist"
                 await self._click(sel["mml_assist_button"])
+            step = "clicar Exec"
             await self._click(sel["mml_execute_button"])
+            step = "aguardar resposta"
             deadline = time.monotonic() + self.s["mml_response_timeout_s"]
             while True:
                 text = await self._all_text()
                 resp = slice_response(text, cmd)
-                if resp and text != before and END_RE.search(resp):
+                if resp and resp != before and END_RE.search(resp):
                     break
                 if time.monotonic() > deadline:
                     await self._trace("error_timeout")
@@ -189,7 +219,8 @@ class BbuSession:
         except PwError as e:
             self.mml_ready = False
             await self._trace("error_mml")
-            raise BbuUnavailable(f"falha na interface MML ({type(e).__name__})") from None
+            detail = (str(e).strip().splitlines() or [""])[0][:220]
+            raise BbuUnavailable(f"falha na interface MML na etapa '{step}': {detail}") from None
         self.last_activity = time.monotonic()
         return resp
 
