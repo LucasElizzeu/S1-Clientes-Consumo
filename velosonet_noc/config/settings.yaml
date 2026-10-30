@@ -2,8 +2,8 @@ timezone: America/Manaus
 keepalive_interval_min: 5       # Rotina A. A BBU derruba a sessão após 10:00 ociosa (visto na tela) => usar < 10
 session_max_age_min: 450        # a tela mostra 'Session Lifetime' ~8h: reloga proativamente antes de expirar
 report_minute: 0                # Rotina B: minuto da hora (0 = horário cheio)
-bbu_timeout_s: 150              # timeout total por BBU na Rotina B
-page_timeout_s: 30
+bbu_timeout_s: 300              # timeout total por BBU na Rotina B
+page_timeout_s: 180
 mml_response_timeout_s: 45
 login_max_retries: 3
 login_cooldown_min: 10          # pausa após esgotar tentativas (evita bloqueio de conta)

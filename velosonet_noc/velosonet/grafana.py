@@ -2,7 +2,7 @@
 reutiliza os targets e consulta /api/ds/query. Retorna o ÚLTIMO ponto numérico real da série, convertido para
 Mb/s pela unidade configurada no próprio painel (nada de estimar valores olhando o gráfico)."""
 from __future__ import annotations
-import copy, logging, os, re, time, unicodedata
+import copy, logging, math, os, re, time, unicodedata
 try:
     import httpx
 except ImportError:          # permite testar a lógica pura sem httpx instalado
@@ -74,6 +74,107 @@ def last_value(frames, spec, scale) -> dict:
             return {"mbps": float(v) * scale, "ts": t / 1000, "metric": spec["metric"]}
     raise GrafanaError("série sem valores numéricos recentes")
 
+def _is_dashboard_source(ds):
+    return ds == "-- Dashboard --" or (
+        isinstance(ds, dict) and ds.get("uid") == "-- Dashboard --"
+    )
+
+
+def _dashboard_source(dash, panel):
+    """Resolve the supported Dashboard card without guessing its selected series."""
+    targets = panel.get("targets") or []
+    if not any(_is_dashboard_source(t.get("datasource") or panel.get("datasource"))
+               for t in targets):
+        return None
+    if len(targets) != 1 or targets[0].get("panelId") is None:
+        raise GrafanaError("Dashboard: esperado um unico painel de origem")
+    transforms = [t for t in panel.get("transformations", []) if not t.get("disabled")]
+    if len(transforms) != 1 or transforms[0].get("id") != "filterFieldsByName":
+        raise GrafanaError("Dashboard: transformacoes do cartao nao suportadas")
+    opts = transforms[0].get("options") or {}
+    include = opts.get("include") or {}
+    names = include.get("names") or []
+    if len(names) != 1 or include.get("pattern") or opts.get("exclude"):
+        raise GrafanaError("Dashboard: esperado filtro com um nome exato de serie")
+    reduce = (panel.get("options") or {}).get("reduceOptions") or {}
+    if reduce.get("calcs") != ["last"] or reduce.get("values") or reduce.get("fields"):
+        raise GrafanaError("Dashboard: redutor do cartao nao suportado (esperado last)")
+    source = resolve_panel(dash, {"panel_id": targets[0]["panelId"]})
+    if any(not t.get("disabled") for t in source.get("transformations", [])):
+        raise GrafanaError("Dashboard: painel de origem possui transformacoes nao suportadas")
+    if any(_is_dashboard_source(t.get("datasource") or source.get("datasource"))
+           for t in source.get("targets", [])):
+        raise GrafanaError("Dashboard: referencias encadeadas nao suportadas")
+    return source, names[0]
+
+
+def _card_value(results, queries, name, spec, scale):
+    """Select one named numeric field; never fall back to the first city."""
+    matches, available = [], set()
+    for query in queries:
+        result = results.get(query.get("refId"))
+        if not isinstance(result, dict):
+            raise GrafanaError(f"Dashboard: resultado ausente para {query.get('refId')}")
+        if result.get("error") or result.get("status", 200) >= 400:
+            raise GrafanaError(f"Dashboard: consulta {query.get('refId')} falhou")
+        for fr in result.get("frames") or []:
+            schema = fr.get("schema") or {}
+            fields = schema.get("fields") or []
+            values = (fr.get("data") or {}).get("values") or []
+            numbers = [i for i, f in enumerate(fields) if f.get("type") == "number"]
+            times = [i for i, f in enumerate(fields) if f.get("type") == "time"]
+            for i in numbers:
+                field = fields[i]
+                config = field.get("config") or {}
+                candidates = {x for x in (field.get("name"), config.get("displayNameFromDS"),
+                                          config.get("displayName")) if isinstance(x, str)}
+                if len(numbers) == 1 and isinstance(schema.get("name"), str):
+                    candidates.add(schema["name"])
+                available.update(candidates)
+                # The Zabbix API may expose "host: item" before the browser
+                # applies setAlias($__zbx_item_name). Remove only the exact
+                # literal host from this query, never an arbitrary prefix.
+                host = (query.get("host") or {}).get("filter")
+                if isinstance(host, str) and host and not host.startswith("/"):
+                    prefix = host + ": "
+                    candidates.update(x[len(prefix):] for x in list(candidates)
+                                      if x.startswith(prefix))
+                # Zabbix aliases can be applied by its browser plugin rather than the API.
+                functions = query.get("functions") or []
+                if all((f.get("def") or {}).get("name") == "setAlias" for f in functions):
+                    for func in functions:
+                        params = func.get("params") or []
+                        if len(params) == 1 and "$__zbx_item_name" in str(params[0]):
+                            candidates.update(str(params[0]).replace("$__zbx_item_name", x)
+                                              for x in list(candidates))
+                if name not in candidates:
+                    continue
+                if any((f.get("def") or {}).get("name") != "setAlias" for f in functions):
+                    raise GrafanaError("Dashboard: funcao da serie selecionada nao suportada")
+                if len(times) != 1 or max(i, times[0]) >= len(values):
+                    raise GrafanaError("Dashboard: estrutura da serie sem tempo/valor")
+                ts, vs = values[times[0]], values[i]
+                if not ts or len(ts) != len(vs):
+                    raise GrafanaError("Dashboard: serie vazia ou incompleta")
+                if any(isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t)
+                       for t in ts):
+                    raise GrafanaError("Dashboard: timestamp invalido")
+                index = max(range(len(ts)), key=ts.__getitem__)
+                matches.append((ts[index], vs[index]))
+    if len(matches) != 1:
+        shown = ", ".join(sorted(available)[:12])
+        raise GrafanaError(f"serie '{name}': {len(matches)} correspondencias (esperado 1); campos: {shown}")
+    stamp, value = matches[0]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise GrafanaError(f"serie '{name}': ultima leitura sem valor numerico")
+    if value < 0:
+        raise GrafanaError(f"serie '{name}': leitura indisponivel (codigo {value})")
+    age = time.time() - stamp / 1000
+    if age > spec.get("max_age_s", 900) or age < -60:
+        raise GrafanaError(f"serie '{name}': timestamp fora da validade ({int(age)}s)")
+    return {"mbps": float(value) * scale, "ts": stamp / 1000, "metric": spec["metric"]}
+
+
 class GrafanaClient:
     def __init__(self, base_url=None, timeout=20):
         if httpx is None: raise ConfigError("instale httpx (pip install -r requirements.txt)")
@@ -112,7 +213,9 @@ class GrafanaClient:
             dash = await self.dashboard(spec["dashboard_uid"])
             panel = resolve_panel(dash, spec)
             scale, why = unit_scale(panel, spec)
-            targets = panel.get("targets", [])
+            shared = _dashboard_source(dash, panel)
+            query_panel = shared[0] if shared else panel
+            targets = query_panel.get("targets", [])
             visible = [t for t in targets if not t.get("hide")]
             ref = spec.get("ref_id") or (visible[0].get("refId") if visible else None)
             queries = []
@@ -120,15 +223,22 @@ class GrafanaClient:
                 q = _subst(copy.deepcopy(t), spec.get("variables") or {})
                 q["hide"] = False
                 if not q.get("datasource"):
-                    q["datasource"] = panel.get("datasource") or dash.get("datasource")
+                    q["datasource"] = query_panel.get("datasource") or dash.get("datasource")
                 q.update(intervalMs=60000, maxDataPoints=500)
                 queries.append(q)
             if not queries: raise GrafanaError("nenhum target utilizável no painel")
             r = await self.http.post("/api/ds/query", json={"queries": queries, "from": "now-30m", "to": "now"})
             r.raise_for_status()
+            if shared:
+                return _card_value(r.json()["results"], queries, shared[1], spec, scale)
             frames = r.json()["results"][ref]["frames"]
+        except httpx.HTTPStatusError as e:
+            request = e.response.request
+            raise GrafanaError(
+                f"HTTP {e.response.status_code} {request.method} {request.url.path}"
+            ) from None
         except httpx.HTTPError as e:
-            raise GrafanaError(f"HTTP {type(e).__name__}") from None
+            raise GrafanaError(f"falha de transporte HTTP: {type(e).__name__}") from None
         except (KeyError, StopIteration, IndexError) as e:
             raise GrafanaError(f"resposta inesperada ({type(e).__name__})") from None
         return last_value(frames, spec, scale)
