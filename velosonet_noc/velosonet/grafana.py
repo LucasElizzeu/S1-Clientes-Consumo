@@ -131,6 +131,16 @@ def _card_value(results, queries, name, spec, scale):
                 if len(numbers) == 1 and isinstance(schema.get("name"), str):
                     candidates.add(schema["name"])
                 available.update(candidates)
+
+                # Normalize Zabbix technical host names
+                datasource = query.get("datasource") or {}
+                if (isinstance(datasource, dict) and
+                        datasource.get("type") == "alexanderzobnin-zabbix-datasource"):
+                    for candidate in list(candidates):
+                        host, separator, item = candidate.partition(": ")
+                        if separator and host and item:
+                            candidates.add(item)
+
                 # The Zabbix API may expose "host: item" before the browser
                 # applies setAlias($__zbx_item_name). Remove only the exact
                 # literal host from this query, never an arbitrary prefix.

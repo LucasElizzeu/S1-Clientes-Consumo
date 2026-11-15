@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-NAVY, BG, GRID, TXT, MUTED = (18, 43, 73), (9, 15, 25), (43, 62, 83), (232, 240, 248), (152, 173, 196)
+NAVY, BG, GRID, TXT, MUTED = (20, 20, 20), (0, 0, 0), (55, 55, 55), (240, 240, 240), (160, 160, 160)
 LEVEL = {"green": ((53, 201, 124), "Normal"), "yellow": ((247, 186, 65), "Alerta"), "red": ((255, 101, 111), "Falha")}
 FONTS = ["DejaVuSans{b}.ttf", "C:/Windows/Fonts/segoeui{w}.ttf", "C:/Windows/Fonts/arial{w}.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans{b}.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-{R}.ttf"]
@@ -58,103 +58,197 @@ def render_report(rows, settings, ts: datetime, out_path: Path, simulation=False
     scale = int(settings.get("report_scale", 2))
     if not 1 <= scale <= 4:
         raise ValueError("report_scale deve estar entre 1 e 4")
-    def u(value): return round(value * scale)
-    def ft(size, bold=False): return font(u(size), bold)
 
-    W, M = u(1600), u(40)
-    top, header_h, row_h = u(240), u(70), u(96)
-    summary_top = top + header_h + len(rows) * row_h + u(34)
-    summary_header, summary_row = u(66), u(62)
-    summary_bottom = summary_top + summary_header + 7 * summary_row + u(12)
-    H = summary_bottom + u(40)
+    def u(value):
+        return round(value * scale)
+
+    def ft(size, bold=False):
+        return font(u(size), bold)
+
+    black = (0, 0, 0)
+    white = (240, 240, 240)
+    muted = (160, 160, 160)
+    green = LEVEL["green"][0]
+    border = (55, 55, 55)
+
+    W, M = u(1100), u(40)
+    top = u(210 if simulation else 165)
+    header_h, row_h = u(62), u(78)
+    table_bottom = top + header_h + len(rows) * row_h
+    heading_top = table_bottom + u(34)
+    cards_top = heading_top + u(76)
+    card_h, gap = u(142), u(22)
+    cards_bottom = cards_top + 3 * card_h + 2 * gap
+    H = cards_bottom + u(100)
+
     S = build_summary(rows, settings, ts)
-    img = Image.new("RGB", (W, H), BG)
+    img = Image.new("RGB", (W, H), black)
     d = ImageDraw.Draw(img)
-    d.rectangle((0, 0, W, u(170)), fill=NAVY)
-    title = "PLANILHA 4G VELOSONET (TEFÉ)"
-    title_size = 48
-    while d.textbbox((0, 0), title, font=ft(title_size, True))[2] > W - 2 * M and title_size > 24:
-        title_size -= 1
-    _c(d, (0, 0, W, u(170)), title, ft(title_size, True), "white")
-    if simulation:
-        d.rectangle((0, u(170), W, u(215)), fill=LEVEL["red"][0])
-        _c(d, (0, u(170), W, u(215)),
-           "SIMULADO ? DADOS FICTÍCIOS, NÃO REPRESENTAM A REDE",
-           ft(28, True), "white")
 
-    cols = [("Site", .16), ("Localidade", .24), ("Usuários 4G", .14),
-            ("Usuários 5G", .14), ("Consumo (Mb/s)", .18), ("Status", .12)]
-    total_width = sum(part for _, part in cols)
+    def fitted(text, size, width, bold=False):
+        while size > 14:
+            box = d.textbbox((0, 0), str(text), font=ft(size, bold))
+            if box[2] - box[0] <= width:
+                break
+            size -= 1
+        return ft(size, bold)
+
+    def centered(box, text, size, color=white, bold=False):
+        text = str(text)
+        fnt = fitted(text, size, box[2] - box[0] - u(20), bold)
+        _c(d, box, text, fnt, color)
+
+    title = "PLANILHA 4G VELOSONET (TEF\u00c9)"
+    centered((M, u(20), W-M, u(118)), title, 44, bold=True)
+    d.rectangle((M, u(132), W-M, u(136)), fill=green)
+
+    if simulation:
+        d.rounded_rectangle(
+            (M, u(151), W-M, u(191)),
+            radius=u(6), fill=(90, 28, 34)
+        )
+        centered(
+            (M, u(151), W-M, u(191)),
+            "SIMULA\u00c7\u00c3O - DADOS FICT\u00cdCIOS",
+            23, bold=True
+        )
+
+    columns = [
+        ("Site", .18), ("Localidade", .29),
+        ("4G", .10), ("5G", .10),
+        ("Mb/s", .15), ("Status", .18)
+    ]
     xs = [M]
-    for _, part in cols:
-        xs.append(xs[-1] + (W - 2 * M) * part / total_width)
-    xs[-1] = W - M
-    d.rectangle((M, top, W - M, top + header_h), fill=NAVY)
-    for i, (name, _) in enumerate(cols):
-        _c(d, (xs[i], top, xs[i + 1], top + header_h), name, ft(26, True), "white")
+    for _, part in columns:
+        xs.append(xs[-1] + (W - 2*M) * part)
+    xs[-1] = W-M
+
+    d.rounded_rectangle(
+        (M, top, W-M, table_bottom),
+        radius=u(16), fill=(15, 15, 15)
+    )
+    d.rectangle((M, top, W-M, top+header_h), fill=(32, 32, 32))
+
+    for i, (label, _) in enumerate(columns):
+        centered(
+            (xs[i], top, xs[i+1], top+header_h),
+            label, 25, bold=True
+        )
+
     y = top + header_h
     for index, row in enumerate(rows):
-        background = (19, 29, 45) if index % 2 == 0 else (24, 38, 57)
-        d.rectangle((M, y, W - M, y + row_h),
-                    fill=background, outline=GRID, width=u(1))
-        _c(d, (xs[0], y, xs[1], y + row_h), row["site"], ft(30, True), TXT)
-        _c(d, (xs[1], y, xs[2], y + row_h), row["locality"], ft(30), TXT)
+        background = (12, 12, 12) if index % 2 == 0 else (24, 24, 24)
+        d.rectangle((M, y, W-M, y+row_h), fill=background)
+
+        centered((xs[0], y, xs[1], y+row_h), row["site"], 25)
+        centered((xs[1], y, xs[2], y+row_h), row["locality"], 27)
+
         for i, key in ((2, "users4g"), (3, "users5g"), (4, "traffic")):
             text, color = _cell(row, key)
-            _c(d, (xs[i], y, xs[i + 1], y + row_h), text, ft(36, True), color)
+            if key == "traffic" and isinstance(row[key], (int, float)):
+                text = f"{row[key]:.1f}".replace(".", ",")
+            centered(
+                (xs[i], y, xs[i+1], y+row_h),
+                text, 28, color, bold=True
+            )
+
         color, label = LEVEL[level_of(row, settings)]
         if row["state"] == "unavailable":
             label = "Indisp."
-        status_font = ft(26, True)
-        box = d.textbbox((0, 0), label, font=status_font)
-        label_width = box[2] - box[0]
-        diameter, gap = u(28), u(10)
-        left = xs[5] + (xs[6] - xs[5] - diameter - gap - label_width) / 2
-        cy = y + row_h / 2
-        d.ellipse((left, cy - diameter / 2, left + diameter, cy + diameter / 2),
-                  fill=color)
-        _c(d, (left + diameter + gap, y,
-               left + diameter + gap + label_width, y + row_h),
-           label, status_font, TXT)
+
+        status_font = fitted(label, 25, xs[6]-xs[5]-u(58), True)
+        bounds = d.textbbox((0, 0), label, font=status_font)
+        width = bounds[2] - bounds[0]
+        diameter, spacing = u(20), u(12)
+        left = xs[5] + (xs[6]-xs[5]-width-diameter-spacing)/2
+        cy = y + row_h/2
+        d.ellipse(
+            (left, cy-diameter/2, left+diameter, cy+diameter/2),
+            fill=color
+        )
+        _c(
+            d,
+            (left+diameter+spacing, y,
+             left+diameter+spacing+width, y+row_h),
+            label, status_font, white
+        )
         y += row_h
 
-    d.rectangle((M, summary_top, W - M, summary_bottom),
-                fill=(19, 29, 45), outline=(48, 75, 108), width=u(2))
-    d.rectangle((M, summary_top, W - M, summary_top + summary_header),
-                fill=(26, 62, 105))
-    d.text((M + u(20), summary_top + u(12)), "RESUMO OPERACIONAL",
-           font=ft(34, True), fill="white")
+
+    # Arredonda a tabela inteira, incluindo cabecalho e ultima linha.
+    table_box = (int(M), int(top), int(W-M), int(table_bottom))
+    table_image = img.crop(table_box)
+    mask = Image.new("L", table_image.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, table_image.width-1, table_image.height-1),
+        radius=u(18), fill=255
+    )
+    d.rectangle(table_box, fill=black)
+    img.paste(table_image, table_box[:2], mask)
+
+    heading = "RESUMO OPERACIONAL"
+    heading_font = fitted(heading, 30, W-2*M-u(260), True)
+    bounds = d.textbbox((0, 0), heading, font=heading_font)
+    heading_width = bounds[2]-bounds[0]
+    center_y = heading_top + u(32)
+    side_end = (W-heading_width)/2-u(26)
+
+    if side_end > M:
+        d.line((M, center_y, side_end, center_y), fill=green, width=u(3))
+        d.line(
+            (W-side_end, center_y, W-M, center_y),
+            fill=green, width=u(3)
+        )
+    _c(
+        d, (M, heading_top, W-M, heading_top+u(64)),
+        heading, heading_font, white
+    )
 
     def fmt(value, missing=False, unit=""):
         if value is None:
             return "n/d"
-        value = f"{value:,.1f}".replace(",", " ") if isinstance(value, float) else str(value)
-        return value + unit + (" (parcial)" if missing else "")
+        if isinstance(value, float):
+            text = f"{value:,.1f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        else:
+            text = f"{value:,}".replace(",", ".")
+        return text + unit + (" (parcial)" if missing else "")
 
     items = [
-        ("Total de BBUs monitoradas", str(S["total"])),
-        ("BBUs com coleta bem-sucedida", f"{S['ok']} / {S['total']}"),
-        ("Total de usuários 4G", fmt(S["u4"], S["m4"])),
-        ("Total de usuários 5G", fmt(S["u5"], S["m5"])),
-        ("Consumo geral", fmt(S["tr"], S["mt"], " Mb/s")),
-        ("Atualização", f"{ts:%d/%m/%Y %H:%M}"),
-        ("Status geral", LEVEL[S["overall"]][1]),
+        ("BBUs monitoradas", str(S["total"]), green),
+        ("Coleta OK", f"{S['ok']} / {S['total']}", green),
+        ("Usu\u00e1rios 4G", fmt(S["u4"], S["m4"]), green),
+        ("Usu\u00e1rios 5G", fmt(S["u5"], S["m5"]), green),
+        ("Consumo geral", fmt(S["tr"], S["mt"], " Mb/s"), green),
+        ("Status geral", LEVEL[S["overall"]][1], LEVEL[S["overall"]][0]),
     ]
-    y = summary_top + summary_header + u(6)
-    for index, (label, value) in enumerate(items):
-        yy = y + index * summary_row
-        if index % 2 == 0:
-            d.rectangle((M + u(2), yy, W - M - u(2), yy + summary_row),
-                        fill=(24, 39, 59))
-        d.text((M + u(20), yy + u(12)), label,
-               font=ft(28, True), fill=TXT)
-        value_x = M + u(660)
-        if label == "Status geral":
-            diameter = u(28)
-            d.ellipse((value_x, yy + u(17), value_x + diameter,
-                       yy + u(17) + diameter), fill=LEVEL[S["overall"]][0])
-            value_x += u(42)
-        d.text((value_x, yy + u(10)), value, font=ft(32, True), fill=(102, 185, 255))
+
+    card_w = (W-2*M-gap)/2
+    for index, (label, value, color) in enumerate(items):
+        left = M + (index % 2)*(card_w+gap)
+        yy = cards_top + (index // 2)*(card_h+gap)
+        right = left+card_w
+
+        d.rounded_rectangle(
+            (left, yy, right, yy+card_h),
+            radius=u(24), fill=(24, 24, 24),
+            outline=border, width=u(1)
+        )
+        d.text(
+            (left+u(26), yy+u(18)),
+            label, font=ft(24, True), fill=white
+        )
+        value_font = fitted(value, 44, card_w-u(52), True)
+        d.text(
+            (left+u(26), yy+u(64)), value,
+            font=value_font,
+            fill=muted if value == "n/d" else color
+        )
+
+    centered(
+        (M, cards_bottom+u(28), W-M, cards_bottom+u(78)),
+        f"\u00daltima atualiza\u00e7\u00e3o: {ts:%d/%m/%Y %H:%M}",
+        24
+    )
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
